@@ -1,0 +1,5 @@
+# high_concurrency_set
+根据mysql数据库压测结果,设定实例保证效率时的最大并发值:
+当负荷达到设定值时，清除sleep连接,动态调整max_connections,和wait_timeout达到最高效率,让mysql服务稳定运行;
+当负荷恢复后,恢复max_connections,和wait_timeout值,让mysql服务给更多用户提供服务.
+
