@@ -1,0 +1,68 @@
+#!/bin/bash
+set -eo pipefail
+
+#WAIT_TIMEOUT满负荷时的timeout,MAX_CONNECT满负荷时的connections
+#MAX_CONCURRENCY压力测试时的最佳并行数,sleep_time检测间隔秒数
+WAIT_TIMEOUT=10
+MAX_CONNECT=50
+MAX_CONCURRENCY=50
+sleep_time=10
+
+# 取到原数据库timeout,和max_connections值
+str_connect="mysql -uroot -proot123456 -h127.0.0.1"
+old_wait_timeout=$(echo "show global variables like 'wait_timeout';" | ${str_connect} 2> /dev/null)
+old_wait_timeout=(${old_wait_timeout})
+old_wait_timeout=${old_wait_timeout[3]}
+old_max_connections=$(echo "show global variables like 'max_connections';" | ${str_connect} 2> /dev/null)
+old_max_connections=(${old_max_connections})
+old_max_connections=${old_max_connections[3]}
+
+
+count_working_sql="select count(id) from information_schema.processlist where command<>'Sleep';"
+count_working=$(echo "${count_working_sql}" | ${str_connect} 2> /dev/null)
+count_working=(${count_working})
+count_working=${count_working[1]}
+
+count_great=0;count_less=0
+change='no'
+while [ 1=1 ];do
+	if [ ${count_working} -ge ${MAX_CONCURRENCY} ];then
+	#并发量大于测试最优值时:
+		count_less=0
+		if [ ${count_great} -ge 3 ];then 
+		# 连续3次检测到
+		# kill sleep线程,减小timeout时间,减小max_connections数值,标记修改变量change
+			sleep_sql="select id from information_schema.processlist where command='Sleep';"
+			sleep_id=$(echo "${sleep_sql}" | ${str_connect} 2> /dev/null)
+			str_sql=
+			for id in ${sleep_id[@]};do
+				if [ ${id} != 'id' ];then
+				#跳过数值第一个,列名
+					str_sql="${str_sql}""kill ${id};"
+				fi
+			done
+			str_sql="${str_sql}""set global wait_timeout=${WAIT_TIMEOUT};\
+				    set global max_connections=${MAX_CONNECT};"
+			echo "${str_sql}" | ${str_connect} 2> /dev/null
+			count_great=0
+			change='yes'
+		else
+			count_great=$[${count_great}+1]
+		fi
+	else
+	#并发量小于测试最优值时:
+		count_great=0
+		if [ ${count_less} -ge 3 ]&&[ ${change}='yes' ];then 
+		# 连续3次检测到,并且之前修改过timeout和max_connections:
+		# 恢复timeout时间,恢复max_connections数值
+			str_sql="set global wait_timeout=${old_wait_timeout};\
+				    set global max_connections=${old_max_connections};"
+			echo "${str_sql}" | ${str_connect} 2> /dev/null
+			str_sql=
+			count_less=0
+		else
+			count_less=$[${count_less}+1]
+		fi
+	fi
+	sleep ${sleep_time}
+done
