@@ -1,11 +1,11 @@
 #!/bin/bash
-set -eo pipefail
+#set -eo pipefail
 
 #WAIT_TIMEOUT满负荷时的timeout,MAX_CONNECT满负荷时的connections
 #MAX_CONCURRENCY压力测试时的最佳并行数,sleep_time检测间隔秒数
 WAIT_TIMEOUT=10
-MAX_CONNECT=50
-MAX_CONCURRENCY=50
+MAX_CONNECT=64
+MAX_CONCURRENCY=64
 sleep_time=10
 
 # 取到原数据库timeout,和max_connections值
